@@ -11,6 +11,7 @@ A terminal-based multi-user chat application built with C++ OOP and file handlin
 
 ## Compile & Run
 g++ -std=c++17 -o chat_app chat_app.cpp
+<br>
 ./chat_app
 
 ## Usage
