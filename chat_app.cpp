@@ -199,26 +199,27 @@ public:
         lastSeen_ = Utils::currentTimestamp();
     }
 
-    // Serialise  →  "username|passwordHash|joinedAt|lastSeen"
+    // Serialise  →  "username|passwordHash|joinedAt|lastSeen|isOnline"
     std::string serialise() const
     {
-        return username_ + "|" + passwordHash_ + "|" + joinedAt_ + "|" + lastSeen_;
+        return username_ + "|" + passwordHash_ + "|" + joinedAt_ + "|" + lastSeen_ + "|" + (isOnline_ ? "1" : "0");
     }
 
     static User deserialise(const std::string &line)
     {
         std::istringstream ss(line);
-        std::string username, hash, joined, seen;
+        std::string username, hash, joined, seen, online;
         std::getline(ss, username, '|');
         std::getline(ss, hash, '|');
         std::getline(ss, joined, '|');
-        std::getline(ss, seen);
+        std::getline(ss, seen, '|');
+        std::getline(ss, online);
         User u;
         u.username_ = username;
         u.passwordHash_ = hash;
         u.joinedAt_ = joined;
         u.lastSeen_ = seen;
-        u.isOnline_ = false;
+        u.isOnline_ = (online == "1");
         return u;
     }
 
@@ -602,23 +603,29 @@ public:
 
     void showOnlineUsers() const
     {
+        // Reload from disk to see users logged in on OTHER terminals
+        auto freshUsers = FileHandler::loadUsers();
         Utils::printHeader("  Online Users");
-        if (onlineUsers_.empty())
+        bool anyOnline = false;
+        for (const auto &kv : freshUsers)
         {
+            if (kv.second.isOnline())
+            {
+                std::cout << "  \033[32m●\033[0m " << kv.first << "\n";
+                anyOnline = true;
+            }
+        }
+        if (!anyOnline)
             std::cout << "  No one is online.\n";
-        }
-        else
-        {
-            for (const auto &u : onlineUsers_)
-                std::cout << "  \033[32m●\033[0m " << u << "\n";
-        }
         Utils::printLine();
     }
 
     void showAllUsers() const
     {
+        // Reload from disk to reflect login state from other terminals
+        auto freshUsers = FileHandler::loadUsers();
         Utils::printHeader("  All Registered Users");
-        for (const auto &kv : users_)
+        for (const auto &kv : freshUsers)
         {
             std::cout << "  " << (kv.second.isOnline() ? "\033[32m●\033[0m " : "\033[31m●\033[0m ")
                       << kv.first
