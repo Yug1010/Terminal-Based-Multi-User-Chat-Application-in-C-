@@ -1,10 +1,3 @@
-/*
- * ============================================================
- *  Terminal-Based Multi-User Chat Application in C++
- *  Features: OOP Design, File Persistence, Multiple Rooms,
- *            Private Messaging, User Auth, Activity Logs
- * ============================================================
- */
 
 #include <iostream>
 #include <fstream>
@@ -28,9 +21,6 @@
 #endif
 #include <memory>
 
-// ─────────────────────────────────────────────
-//  Utility helpers
-// ─────────────────────────────────────────────
 namespace Utils
 {
     std::string currentTimestamp()
@@ -49,7 +39,6 @@ namespace Utils
         return (start == std::string::npos) ? "" : s.substr(start, end - start + 1);
     }
 
-    // Simple hash – not cryptographic, but good enough for a demo
     std::string hashPassword(const std::string &password)
     {
         unsigned long hash = 5381;
@@ -58,12 +47,6 @@ namespace Utils
         std::ostringstream oss;
         oss << std::hex << hash;
         return oss.str();
-    }
-
-    void clearScreen()
-    {
-        // Intentionally left as a no-op:
-        // system("clear") crashes in split terminals and VS Code panes.
     }
 
     void printLine(char ch = '-', int len = 60)
@@ -87,9 +70,6 @@ namespace Utils
     }
 }
 
-// ─────────────────────────────────────────────
-//  Class: Message
-// ─────────────────────────────────────────────
 class Message
 {
 private:
@@ -110,7 +90,6 @@ public:
           timestamp_(Utils::currentTimestamp()),
           isPrivate_(isPrivate), recipient_(recipient) {}
 
-    // Serialise  →  "timestamp|sender|recipient|isPrivate|content"
     std::string serialise() const
     {
         return timestamp_ + "|" + sender_ + "|" + recipient_ + "|" + (isPrivate_ ? "1" : "0") + "|" + content_;
@@ -135,7 +114,6 @@ public:
         return m;
     }
 
-    // Display with nice formatting
     void display(const std::string &viewerUsername = "") const
     {
         if (isPrivate_)
@@ -154,7 +132,6 @@ public:
         (void)viewerUsername;
     }
 
-    // Getters
     const std::string &getSender() const { return sender_; }
     const std::string &getContent() const { return content_; }
     const std::string &getTimestamp() const { return timestamp_; }
@@ -162,9 +139,6 @@ public:
     bool isPrivate() const { return isPrivate_; }
 };
 
-// ─────────────────────────────────────────────
-//  Class: User
-// ─────────────────────────────────────────────
 class User
 {
 private:
@@ -231,7 +205,6 @@ public:
                   << " Status   : " << (isOnline_ ? "\033[32mOnline\033[0m" : "\033[31mOffline\033[0m") << "\n";
     }
 
-    // Getters / setters
     const std::string &getUsername() const { return username_; }
     const std::string &getPasswordHash() const { return passwordHash_; }
     bool isOnline() const { return isOnline_; }
@@ -240,9 +213,6 @@ public:
     void setPasswordHash(const std::string &h) { passwordHash_ = h; }
 };
 
-// ─────────────────────────────────────────────
-//  Class: FileHandler  (file persistence layer)
-// ─────────────────────────────────────────────
 class FileHandler
 {
 private:
@@ -257,13 +227,12 @@ private:
 
     static void ensureDir()
     {
-        // Works on both Windows (_mkdir) and Linux/macOS (mkdir)
+
         if (MAKE_DIR("chat_data") != 0 && errno != EEXIST)
             throw std::runtime_error("Cannot create data directory 'chat_data'.");
     }
 
 public:
-    // ── Users ──────────────────────────────────
     static void saveUsers(const std::map<std::string, User> &users)
     {
         ensureDir();
@@ -272,6 +241,46 @@ public:
             throw std::runtime_error("Cannot write users file.");
         for (const auto &kv : users)
             f << kv.second.serialise() << "\n";
+    }
+
+    static void saveOneUser(const User &user)
+    {
+        ensureDir();
+        auto users = loadUsers();
+        users[user.getUsername()] = user;
+        saveUsers(users);
+    }
+
+    static std::string membersFile(const std::string &room)
+    {
+        return DATA_DIR + "room_" + room + "_members.txt";
+    }
+
+    static void saveMembers(const std::string &room,
+                            const std::set<std::string> &members)
+    {
+        ensureDir();
+        std::ofstream f(membersFile(room), std::ios::trunc);
+        if (!f)
+            throw std::runtime_error("Cannot write members file.");
+        for (const auto &m : members)
+            f << m << "\n";
+    }
+
+    static std::set<std::string> loadMembers(const std::string &room)
+    {
+        std::set<std::string> members;
+        std::ifstream f(membersFile(room));
+        if (!f)
+            return members;
+        std::string line;
+        while (std::getline(f, line))
+        {
+            line = Utils::trim(line);
+            if (!line.empty())
+                members.insert(line);
+        }
+        return members;
     }
 
     static std::map<std::string, User> loadUsers()
@@ -294,7 +303,6 @@ public:
         return users;
     }
 
-    // ── Messages ───────────────────────────────
     static void appendMessage(const std::string &room, const Message &msg)
     {
         ensureDir();
@@ -320,7 +328,6 @@ public:
         return msgs;
     }
 
-    // ── Activity log ───────────────────────────
     static void log(const std::string &entry)
     {
         ensureDir();
@@ -329,7 +336,6 @@ public:
             f << "[" << Utils::currentTimestamp() << "] " << entry << "\n";
     }
 
-    // ── Room list ──────────────────────────────
     static void saveRooms(const std::set<std::string> &rooms)
     {
         ensureDir();
@@ -361,9 +367,6 @@ const std::string FileHandler::DATA_DIR = "chat_data/";
 const std::string FileHandler::USERS_FILE = "chat_data/users.txt";
 const std::string FileHandler::LOG_FILE = "chat_data/activity.log";
 
-// ─────────────────────────────────────────────
-//  Class: ChatRoom
-// ─────────────────────────────────────────────
 class ChatRoom
 {
 private:
@@ -371,7 +374,7 @@ private:
     std::string createdBy_;
     std::string createdAt_;
     std::vector<Message> messages_;
-    std::set<std::string> members_; // users currently in room
+    std::set<std::string> members_;
 
 public:
     ChatRoom() = default;
@@ -380,6 +383,7 @@ public:
         : name_(name), createdBy_(creator), createdAt_(Utils::currentTimestamp())
     {
         messages_ = FileHandler::loadMessages(name_);
+        members_ = FileHandler::loadMembers(name_);
     }
 
     void addMessage(const Message &msg)
@@ -405,7 +409,7 @@ public:
 
     void showHistory(const std::string &viewer, int last = 20) const
     {
-        // Always read fresh from disk so messages from OTHER terminals are visible
+
         std::vector<Message> fresh = FileHandler::loadMessages(name_);
         Utils::printHeader("  Room: " + name_);
         if (fresh.empty())
@@ -435,13 +439,15 @@ public:
 
     void showMembers() const
     {
+
+        std::set<std::string> fresh = FileHandler::loadMembers(name_);
         std::cout << " Active members in \033[33m" << name_ << "\033[0m:\n";
-        if (members_.empty())
+        if (fresh.empty())
         {
             std::cout << "  (none)\n";
             return;
         }
-        for (const auto &m : members_)
+        for (const auto &m : fresh)
             std::cout << "  • " << m << "\n";
     }
 
@@ -453,9 +459,6 @@ public:
     const std::set<std::string> &getMembers() const { return members_; }
 };
 
-// ─────────────────────────────────────────────
-//  Class: ChatServer  (singleton)
-// ─────────────────────────────────────────────
 class ChatServer
 {
 private:
@@ -466,9 +469,9 @@ private:
     ChatServer()
     {
         users_ = FileHandler::loadUsers();
-        // Load persisted rooms
+
         auto roomNames = FileHandler::loadRooms();
-        roomNames.insert("General"); // always ensure General exists
+        roomNames.insert("General");
         for (const auto &rn : roomNames)
             rooms_.emplace(rn, ChatRoom(rn, "system"));
         FileHandler::saveRooms(roomNames);
@@ -476,7 +479,6 @@ private:
     }
 
 public:
-    // Singleton access
     static ChatServer &instance()
     {
         static ChatServer inst;
@@ -489,7 +491,7 @@ public:
         if (username.empty() || password.empty())
             return false;
         if (users_.count(username))
-            return false; // already exists
+            return false;
         users_[username] = User(username, Utils::hashPassword(password));
         FileHandler::saveUsers(users_);
         FileHandler::log("New user registered: " + username);
@@ -505,7 +507,8 @@ public:
             return nullptr;
         it->second.login();
         onlineUsers_.insert(username);
-        FileHandler::saveUsers(users_);
+
+        FileHandler::saveOneUser(it->second);
         FileHandler::log(username + " logged in.");
         return &it->second;
     }
@@ -516,22 +519,27 @@ public:
         if (it != users_.end())
         {
             it->second.logout();
-            FileHandler::saveUsers(users_);
+            FileHandler::saveOneUser(it->second);
         }
         onlineUsers_.erase(username);
-        // Remove from all rooms
+
         for (auto &kv : rooms_)
-            kv.second.removeMember(username);
+        {
+            if (kv.second.hasMember(username))
+            {
+                kv.second.removeMember(username);
+                FileHandler::saveMembers(kv.first, kv.second.getMembers());
+            }
+        }
         FileHandler::log(username + " logged out.");
     }
 
-    // ── Rooms ──────────────────────────────────
     bool createRoom(const std::string &name, const std::string &creator)
     {
         if (rooms_.count(name))
             return false;
         rooms_.emplace(name, ChatRoom(name, creator));
-        // Persist room list
+
         std::set<std::string> rnames;
         for (auto &kv : rooms_)
             rnames.insert(kv.first);
@@ -546,6 +554,7 @@ public:
         if (it == rooms_.end())
             return false;
         it->second.addMember(username);
+        FileHandler::saveMembers(roomName, it->second.getMembers());
         FileHandler::log(username + " joined room: " + roomName);
         return true;
     }
@@ -556,11 +565,11 @@ public:
         if (it != rooms_.end())
         {
             it->second.removeMember(username);
+            FileHandler::saveMembers(roomName, it->second.getMembers());
             FileHandler::log(username + " left room: " + roomName);
         }
     }
 
-    // ── Messaging ──────────────────────────────
     bool sendMessage(const std::string &roomName,
                      const std::string &sender,
                      const std::string &content)
@@ -589,7 +598,6 @@ public:
         return true;
     }
 
-    // ── Queries ────────────────────────────────
     void showRooms() const
     {
         Utils::printHeader("  Available Rooms");
@@ -603,7 +611,7 @@ public:
 
     void showOnlineUsers() const
     {
-        // Reload from disk to see users logged in on OTHER terminals
+
         auto freshUsers = FileHandler::loadUsers();
         Utils::printHeader("  Online Users");
         bool anyOnline = false;
@@ -622,7 +630,7 @@ public:
 
     void showAllUsers() const
     {
-        // Reload from disk to reflect login state from other terminals
+
         auto freshUsers = FileHandler::loadUsers();
         Utils::printHeader("  All Registered Users");
         for (const auto &kv : freshUsers)
@@ -645,9 +653,6 @@ public:
     const std::set<std::string> &getOnlineUsers() const { return onlineUsers_; }
 };
 
-// ─────────────────────────────────────────────
-//  Class: Session  (one logged-in user's context)
-// ─────────────────────────────────────────────
 class Session
 {
 private:
@@ -704,7 +709,7 @@ private:
             }
             else if (input.substr(0, 4) == "/msg")
             {
-                // /msg <user> <message>
+
                 std::istringstream ss(input.substr(5));
                 std::string target;
                 ss >> target;
@@ -733,7 +738,7 @@ private:
                 }
                 else
                 {
-                    // Re-read from disk so messages from other terminals appear too
+
                     room->showHistory(user_->getUsername());
                 }
             }
@@ -745,7 +750,6 @@ public:
 
     void run()
     {
-        Utils::clearScreen();
         Utils::printHeader("  Welcome, " + user_->getUsername() + "!");
         std::cout << "  Logged in at: " << Utils::currentTimestamp() << "\n";
         Utils::printLine();
@@ -823,11 +827,9 @@ public:
                     {
                         user_->setPasswordHash(Utils::hashPassword(np));
                         FileHandler::saveUsers(
-                            // Re-fetch by reference hack: just call saveUsers via server
-                            // We'll re-load after saving via a direct approach
-                            std::map<std::string, User>{} // placeholder – see note below
-                        );
-                        // Direct save is simpler – re-read, update, save
+
+                            std::map<std::string, User>{});
+
                         auto users = FileHandler::loadUsers();
                         users[user_->getUsername()].setPasswordHash(Utils::hashPassword(np));
                         FileHandler::saveUsers(users);
@@ -857,9 +859,6 @@ public:
     }
 };
 
-// ─────────────────────────────────────────────
-//  Class: ChatApplication  (entry point / UI)
-// ─────────────────────────────────────────────
 class ChatApplication
 {
 private:
@@ -867,7 +866,6 @@ private:
 
     void showWelcomeBanner() const
     {
-        Utils::clearScreen();
         std::cout << "\n";
         Utils::printLine('=');
         std::cout << "║                                                          ║\n"
@@ -983,9 +981,6 @@ public:
     }
 };
 
-// ─────────────────────────────────────────────
-//  main
-// ─────────────────────────────────────────────
 int main()
 {
     try
